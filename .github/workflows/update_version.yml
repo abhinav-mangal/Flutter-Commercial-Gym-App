@@ -1,0 +1,45 @@
+name: Update version
+
+on:
+  repository_dispatch:
+    types: [update-version]
+
+jobs:
+  update_version:
+    name: Update version
+    runs-on: ubuntu-latest
+    env:
+      branch_name: "main"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ github.event.client_payload.token }}
+
+      - name: Setup flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.7.12'
+          channel: 'stable'
+          cache: true
+          cache-key: 'flutter-:os:-:channel:-:version:-:arch:-:hash:' # optional, change this to force refresh cache
+          architecture: x64
+          cache-path: '${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:'
+
+      - name: Update version
+        shell: bash
+        run: |
+          git fetch
+          git checkout -B ${{ env.branch_name }}
+          git config --global user.name 'Energym Service Account'
+          git config --global user.email 'github_service@energym.com'
+          flutter pub global activate cider
+          export PATH="$PATH":"$HOME/.pub-cache/bin"
+          OLD_VERSION=$(cider version)
+          cider bump ${{ github.event.client_payload.bump_type }}
+          NEW_VERSION=$(cider version)
+          git stage *
+          git commit -m "Bumped version $OLD_VERSION -> $NEW_VERSION"
+          git tag $NEW_VERSION
+          git push origin $NEW_VERSION
+          git push origin main

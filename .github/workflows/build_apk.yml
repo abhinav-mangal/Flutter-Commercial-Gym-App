@@ -1,0 +1,88 @@
+name: Build Android APK file
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  TAG_NAME: ${{ github.base_ref || github.ref_name }} # Works for both, direct push and PR
+
+jobs:
+  build:
+    name: Build Android apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+      
+      # Required to build apk
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.7.12'
+          channel: 'stable'
+          cache: true
+          cache-key: 'flutter-:os:-:channel:-:version:-:arch:-:hash:' # optional, change this to force refresh cache
+          architecture: x64
+          cache-path: '${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:'
+          
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Extract version
+        shell: bash
+        run: |
+          VERSION=${{env.TAG_NAME}}
+          # Remove v from version
+          STRIPPED_VERSION=$(echo ${VERSION:1})
+          # Break version by +
+          VERSION_ARRAY=($(echo $STRIPPED_VERSION | tr "+" "\n"))
+          BUILD_NAME=$(echo "${VERSION_ARRAY[0]}")
+          BUILD_NUMBER=$(echo "${VERSION_ARRAY[1]}")
+          echo "Build Name - $BUILD_NAME"
+          echo "Build Number - $BUILD_NUMBER"
+          echo "build-name=$(echo $BUILD_NAME)" >> $GITHUB_OUTPUT
+          echo "build-number=$(echo $BUILD_NUMBER)" >> $GITHUB_OUTPUT
+          echo "version=$(echo $VERSION)" >> $GITHUB_OUTPUT
+        id: version
+
+      - name: Build apk file
+        run: |
+          flutter build apk --build-name=${{ steps.version.outputs.build-name }} --build-number=${{ steps.version.outputs.build-number }}
+          # Add version number to file name
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-release-${{ steps.version.outputs.version }}.apk
+
+      - uses: r0adkll/sign-android-release@v1
+        name: Sign app APK
+        # ID used to access action output
+        id: sign_app
+        with:
+          releaseDirectory: build/app/outputs/flutter-apk
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          # override default build-tools version (29.0.3) -- optional
+          BUILD_TOOLS_VERSION: "30.0.2"
+
+      - name: Archive APK file
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release-${{ steps.version.outputs.version }}
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
+
+      # - name: Start release build
+      #   run: flutter build appbundle --build-name=${{ steps.version.outputs.current-version }} --build-number=1
+
+      # - name: Archive AAB file
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: app-release-v${{ steps.version.outputs.current-version }}.aab
+      #     path: build/app/outputs/bundle/release/app-release.aab

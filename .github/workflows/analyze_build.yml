@@ -1,0 +1,36 @@
+name: Analyze build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  TAG_NAME: ${{ github.base_ref || github.ref_name }} # Works for both, direct push and PR
+
+jobs:
+  analyze:
+    name: Analyze Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - name: Setup flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.7.12'
+          channel: 'stable'
+          cache: true
+          cache-key: 'flutter-:os:-:channel:-:version:-:arch:-:hash:' # optional, change this to force refresh cache
+          architecture: x64
+          cache-path: '${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:'
+          
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze build
+        run: flutter analyze --no-pub
+

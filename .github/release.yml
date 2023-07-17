@@ -1,0 +1,22 @@
+# This works as a template for creating release notes using Github API
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - octocat
+  categories:
+    - title: Exciting New Features 🎉
+      labels:
+        - "*"
+      exclude:
+        labels:
+          - Semver-Minor
+          - fix
+          - bug
+    - title: Bugs Squashed 🐞
+      labels:
+        - Semver-Minor
+        - fix
+        - bug
